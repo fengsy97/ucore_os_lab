@@ -167,12 +167,18 @@ $(call create_target_host,sign,sign)
 # -------------------------------------------------------------------
 
 # create ucore.img
-UCOREIMG	:= $(call totarget,ucore.img)
-
-$(UCOREIMG): $(kernel) $(bootblock)
-	$(V)dd if=/dev/zero of=$@ count=10000
+UCOREIMG	:= $(call totarget,ucore.img)	#定义变量
+$(UCOREIMG): $(kernel) $(bootblock)			#主体规则，目标：前置条件
+	#需要用到两个依赖文件，分别就是$(kernel)和$(bootblock)
+	#三条生成规则
+	#初始化ucore.img所需要的空间，即10000个block
+	$(V)dd if=/dev/zero of=$@ count=10000	
+	#将bootblock拷贝到第一个block，选项conv=notrunc我们查询可得知是表示不截短输出文件地输出；
 	$(V)dd if=$(bootblock) of=$@ conv=notrunc
+	#将$(kernel)的内容拷贝到$(UCOREIMG)，且选项内容是不截短输出文件地输出以及从输出文件开头跳过1个块后再开始复制。
 	$(V)dd if=$(kernel) of=$@ seek=1 conv=notrunc
+	#
+
 
 $(call create_target,ucore.img)
 
