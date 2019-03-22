@@ -11,6 +11,27 @@
 
 #define TICK_NUM 100
 
+static void switch_to_user(struct trapframe *tf){
+    if (tf->tf_cs != USER_CS) {
+        //iret时会从堆栈弹出的段寄存器进行修改
+          tf->tf_cs = USER_CS;
+          tf->tf_ds = USER_DS;
+          tf->tf_es = USER_DS;
+          tf->tf_ss = USER_DS;
+          tf->tf_eflags |= FL_IOPL_MASK;//转User态时，将调用io所需权限降低。
+        }
+}
+static void switch_to_kernel(struct trapframe *tf){
+    if (tf->tf_cs != KERNEL_CS) {
+        //iret时会从堆栈弹出的段寄存器进行修改
+          tf->tf_cs = KERNEL_CS;
+          tf->tf_ds = KERNEL_DS;
+          tf->tf_es = KERNEL_DS;
+          tf->tf_ss = KERNEL_DS;
+          tf->tf_eflags &= ~FL_IOPL_MASK;
+        }
+}
+
 static void print_ticks() {
     cprintf("%d ticks\n",TICK_NUM);
 #ifdef DEBUG_GRADE
@@ -49,7 +70,11 @@ idt_init(void) {
     extern uintptr_t __vectors[];
     int i = 0;
     for (; i < 256; ++i) {
-        SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
+        if (i == T_SYSCALL || i == T_SWITCH_TOK) {
+			SETGATE(idt[i], 1, KERNEL_CS, __vectors[i], DPL_USER);
+		} else {
+			SETGATE(idt[i], 0, KERNEL_CS, __vectors[i], DPL_KERNEL);
+		}
     }
     SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
     lidt(&idt_pd);
@@ -167,11 +192,21 @@ trap_dispatch(struct trapframe *tf) {
     case IRQ_OFFSET + IRQ_KBD:
         c = cons_getc();
         cprintf("kbd [%03d] %c\n", c, c);
+        if (c == '0') {
+        	switch_to_kernel(tf);
+        	print_trapframe(tf);
+        }
+        if (c == '3') {
+        	switch_to_user(tf);
+        	print_trapframe(tf);
+        }
         break;
     //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
     case T_SWITCH_TOU:
+        switch_to_user(tf);
+        break;
     case T_SWITCH_TOK:
-        panic("T_SWITCH_** ??\n");
+        switch_to_kernel(tf);
         break;
     case IRQ_OFFSET + IRQ_IDE1:
     case IRQ_OFFSET + IRQ_IDE2:
@@ -197,4 +232,6 @@ trap(struct trapframe *tf) {
     // dispatch based on what type of trap occurred
     trap_dispatch(tf);
 }
+
+
 
